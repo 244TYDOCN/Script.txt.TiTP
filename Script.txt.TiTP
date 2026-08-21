@@ -1,0 +1,584 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local player = Players.LocalPlayer
+
+-- ตัวแประบบบิน
+local flySpeed = 100
+local globalPingPong = false -- โหมดบินย้อนกลับ (เปิด/ปิด จากปุ่มด้านบน)
+
+-- 1. สร้าง หน้าจอ GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MultiTeleportGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- ปุ่มเปิด/ปิดหน้าต่าง (Toggle Button)
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 45, 0, 45)
+toggleButton.Position = UDim2.new(0, 20, 0.5, -22)
+toggleButton.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+toggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Text = "TP"
+toggleButton.Font = Enum.Font.SourceSansBold
+toggleButton.TextSize = 18
+toggleButton.Active = true
+toggleButton.Draggable = true
+toggleButton.Parent = screenGui
+
+local toggleCorner = Instance.new("UICorner")
+toggleCorner.CornerRadius = UDim.new(0, 10)
+toggleCorner.Parent = toggleButton
+
+-- กรอบหลัก
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 370, 0, 390)
+frame.Position = UDim2.new(0.5, -185, 0.5, -195)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+frame.Parent = screenGui
+
+local frameCorner = Instance.new("UICorner")
+frameCorner.CornerRadius = UDim.new(0, 10)
+frameCorner.Parent = frame
+
+-- ระบบเปิด/ปิดหน้าต่างหลัก
+local isOpen = true
+toggleButton.MouseButton1Click:Connect(function()
+	isOpen = not isOpen
+	frame.Visible = isOpen
+	toggleButton.BackgroundColor3 = isOpen and Color3.fromRGB(0, 120, 215) or Color3.fromRGB(80, 80, 80)
+end)
+
+-- แถบหัวข้อ + ปุ่มตั้งค่าต่างๆ
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 40)
+header.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+header.BorderSizePixel = 0
+header.Parent = frame
+
+local headerCorner = Instance.new("UICorner")
+headerCorner.CornerRadius = UDim.new(0, 10)
+headerCorner.Parent = header
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(0, 130, 1, 0)
+title.Position = UDim2.new(0, 10, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "Teleport Manager"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Font = Enum.Font.SourceSansBold
+title.TextSize = 16
+title.Parent = header
+
+-- ปุ่มเปิด/ปิด โหมดบินย้อนกลับ (อยู่ข้างๆ ปุ่ม ÷ +)
+local pingPongBtn = Instance.new("TextButton")
+pingPongBtn.Size = UDim2.new(0, 75, 0, 30)
+pingPongBtn.Position = UDim2.new(1, -155, 0, 5)
+pingPongBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+pingPongBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+pingPongBtn.Text = "ย้อนกลับ: ปิด"
+pingPongBtn.Font = Enum.Font.SourceSansBold
+pingPongBtn.TextSize = 11
+pingPongBtn.Parent = header
+
+local pingPongCorner = Instance.new("UICorner")
+pingPongCorner.CornerRadius = UDim.new(0, 6)
+pingPongCorner.Parent = pingPongBtn
+
+pingPongBtn.MouseButton1Click:Connect(function()
+	globalPingPong = not globalPingPong
+	if globalPingPong then
+		pingPongBtn.Text = "ย้อนกลับ: เปิด"
+		pingPongBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 70)
+	else
+		pingPongBtn.Text = "ย้อนกลับ: ปิด"
+		pingPongBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 80)
+	end
+end)
+
+-- ปุ่ม ÷ สำหรับเพิ่มรายการแบบ Multi-Point
+local multiAddButton = Instance.new("TextButton")
+multiAddButton.Size = UDim2.new(0, 30, 0, 30)
+multiAddButton.Position = UDim2.new(1, -74, 0, 5)
+multiAddButton.BackgroundColor3 = Color3.fromRGB(200, 120, 0)
+multiAddButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+multiAddButton.Text = "÷"
+multiAddButton.Font = Enum.Font.SourceSansBold
+multiAddButton.TextSize = 20
+multiAddButton.Parent = header
+
+local multiAddCorner = Instance.new("UICorner")
+multiAddCorner.CornerRadius = UDim.new(0, 6)
+multiAddCorner.Parent = multiAddButton
+
+-- ปุ่ม + สำหรับเพิ่มจุดเทเลพอร์ตปกติ
+local addButton = Instance.new("TextButton")
+addButton.Size = UDim2.new(0, 30, 0, 30)
+addButton.Position = UDim2.new(1, -38, 0, 5)
+addButton.BackgroundColor3 = Color3.fromRGB(0, 170, 90)
+addButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+addButton.Text = "+"
+addButton.Font = Enum.Font.SourceSansBold
+addButton.TextSize = 20
+addButton.Parent = header
+
+local addCorner = Instance.new("UICorner")
+addCorner.CornerRadius = UDim.new(0, 6)
+addCorner.Parent = addButton
+
+-- แถบปรับความเร็วการบิน (Speed Control Panel)
+local speedFrame = Instance.new("Frame")
+speedFrame.Size = UDim2.new(1, -16, 0, 30)
+speedFrame.Position = UDim2.new(0, 8, 0, 45)
+speedFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+speedFrame.Parent = frame
+
+local speedCorner = Instance.new("UICorner")
+speedCorner.CornerRadius = UDim.new(0, 6)
+speedCorner.Parent = speedFrame
+
+local speedLabel = Instance.new("TextLabel")
+speedLabel.Size = UDim2.new(0, 100, 1, 0)
+speedLabel.Position = UDim2.new(0, 10, 0, 0)
+speedLabel.BackgroundTransparency = 1
+speedLabel.Text = "ความเร็วการบิน:"
+speedLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+speedLabel.Font = Enum.Font.SourceSansBold
+speedLabel.TextSize = 13
+speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+speedLabel.Parent = speedFrame
+
+local speedInput = Instance.new("TextBox")
+speedInput.Size = UDim2.new(0, 80, 0, 22)
+speedInput.Position = UDim2.new(0, 110, 0, 4)
+speedInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+speedInput.TextColor3 = Color3.fromRGB(0, 220, 255)
+speedInput.Text = tostring(flySpeed)
+speedInput.Font = Enum.Font.SourceSansBold
+speedInput.TextSize = 14
+speedInput.Parent = speedFrame
+
+local speedInputCorner = Instance.new("UICorner")
+speedInputCorner.CornerRadius = UDim.new(0, 4)
+speedInputCorner.Parent = speedInput
+
+speedInput:GetPropertyChangedSignal("Text"):Connect(function()
+	local num = tonumber(speedInput.Text)
+	if num then flySpeed = math.max(1, num) end
+end)
+
+-- ScrollingFrame
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(1, -16, 1, -85)
+scrollFrame.Position = UDim2.new(0, 8, 0, 80)
+scrollFrame.BackgroundTransparency = 1
+scrollFrame.BorderSizePixel = 0
+scrollFrame.ScrollBarThickness = 4
+scrollFrame.Parent = frame
+
+local uiList = Instance.new("UIListLayout")
+uiList.SortOrder = Enum.SortOrder.LayoutOrder
+uiList.Padding = UDim.new(0, 6)
+uiList.Parent = scrollFrame
+
+uiList:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+	scrollFrame.CanvasSize = UDim2.new(0, 0, 0, uiList.AbsoluteContentSize.Y + 10)
+end)
+
+---------------------------------------------------------
+-- ฟังก์ชันค้นหา Root Part (ตัวละคร หรือ รถ/เรือ) และระบบ Tween
+---------------------------------------------------------
+local function getTargetRoot()
+	local char = player.Character
+	if not char then return nil end
+	
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
+	if humanoid and humanoid.SeatPart then
+		local vehicle = humanoid.SeatPart.Parent
+		while vehicle and not vehicle:IsA("Model") do
+			vehicle = vehicle.Parent
+		end
+		if vehicle then
+			return vehicle.PrimaryPart or vehicle:FindFirstChildWhichIsA("BasePart") or char:FindFirstChild("HumanoidRootPart")
+		end
+	end
+	return char:FindFirstChild("HumanoidRootPart")
+end
+
+local function flyTo(targetCFrame)
+	local root = getTargetRoot()
+	if not root then return nil, 0 end
+
+	local distance = (root.Position - targetCFrame.Position).Magnitude
+	local duration = distance / math.max(1, flySpeed)
+
+	local tweenInfo = TweenInfo.new(duration, Enum.EasingStyle.Linear)
+	local tween = TweenService:Create(root, tweenInfo, {CFrame = targetCFrame})
+	
+	tween:Play()
+	return tween, duration
+end
+
+---------------------------------------------------------
+-- 2. ฟังก์ชันสร้างรายการเทเลพอร์ตแบบปกติ (+)
+---------------------------------------------------------
+local locationCounter = 0
+
+local function createSingleTeleportRow()
+	locationCounter = locationCounter + 1
+	local rowId = locationCounter
+	local savedCFrame = nil
+	local generatedScript = ""
+
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 40)
+	row.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+	row.BorderSizePixel = 0
+	row.Parent = scrollFrame
+
+	local rowCorner = Instance.new("UICorner")
+	rowCorner.CornerRadius = UDim.new(0, 6)
+	rowCorner.Parent = row
+
+	local tpBtn = Instance.new("TextButton")
+	tpBtn.Size = UDim2.new(0, 85, 0, 28)
+	tpBtn.Position = UDim2.new(0, 6, 0, 6)
+	tpBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	tpBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+	tpBtn.Text = "บินไป " .. rowId
+	tpBtn.Font = Enum.Font.SourceSansBold
+	tpBtn.TextSize = 13
+	tpBtn.Parent = row
+
+	local tpCorner = Instance.new("UICorner")
+	tpCorner.CornerRadius = UDim.new(0, 4)
+	tpCorner.Parent = tpBtn
+
+	local setBtn = Instance.new("TextButton")
+	setBtn.Size = UDim2.new(0, 70, 0, 28)
+	setBtn.Position = UDim2.new(0, 96, 0, 6)
+	setBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+	setBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	setBtn.Text = "วางจุด"
+	setBtn.Font = Enum.Font.SourceSansBold
+	setBtn.TextSize = 13
+	setBtn.Parent = row
+
+	local setCorner = Instance.new("UICorner")
+	setCorner.CornerRadius = UDim.new(0, 4)
+	setCorner.Parent = setBtn
+
+	local copyBtn = Instance.new("TextButton")
+	copyBtn.Size = UDim2.new(0, 85, 0, 28)
+	copyBtn.Position = UDim2.new(0, 171, 0, 6)
+	copyBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+	copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	copyBtn.Text = "คัดลอกโค้ด"
+	copyBtn.Font = Enum.Font.SourceSansBold
+	copyBtn.TextSize = 12
+	copyBtn.Parent = row
+
+	local copyCorner = Instance.new("UICorner")
+	copyCorner.CornerRadius = UDim.new(0, 4)
+	copyCorner.Parent = copyBtn
+
+	local delBtn = Instance.new("TextButton")
+	delBtn.Size = UDim2.new(0, 28, 0, 28)
+	delBtn.Position = UDim2.new(1, -34, 0, 6)
+	delBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+	delBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	delBtn.Text = "X"
+	delBtn.Font = Enum.Font.SourceSansBold
+	delBtn.TextSize = 13
+	delBtn.Parent = row
+
+	local delCorner = Instance.new("UICorner")
+	delCorner.CornerRadius = UDim.new(0, 4)
+	delCorner.Parent = delBtn
+
+	setBtn.MouseButton1Click:Connect(function()
+		local root = getTargetRoot()
+		if root then
+			savedCFrame = root.CFrame
+			local cfComponents = {savedCFrame:GetComponents()}
+			generatedScript = string.format([[
+local TweenService = game:GetService("TweenService")
+local targetCF = CFrame.new(%s)
+local char = game:GetService("Players").LocalPlayer.Character
+local root = char and (char:FindFirstChildOfClass("Humanoid").SeatPart and char:FindFirstChildOfClass("Humanoid").SeatPart.Parent.PrimaryPart or char:FindFirstChild("HumanoidRootPart"))
+if root then
+    local dist = (root.Position - targetCF.Position).Magnitude
+    TweenService:Create(root, TweenInfo.new(dist/%d, Enum.EasingStyle.Linear), {CFrame = targetCF}):Play()
+end]], table.concat(cfComponents, ", "), flySpeed)
+
+			tpBtn.BackgroundColor3 = Color3.fromRGB(40, 167, 69)
+			tpBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			copyBtn.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
+			
+			setBtn.Text = "วางแล้ว"
+			task.wait(0.8)
+			setBtn.Text = "วางจุดใหม่"
+		end
+	end)
+
+	tpBtn.MouseButton1Click:Connect(function()
+		if savedCFrame then
+			flyTo(savedCFrame)
+		end
+	end)
+
+	copyBtn.MouseButton1Click:Connect(function()
+		if generatedScript ~= "" and setclipboard then
+			setclipboard(generatedScript)
+			copyBtn.Text = "คัดลอกแล้ว!"
+			task.wait(1)
+			copyBtn.Text = "คัดลอกโค้ด"
+		end
+	end)
+
+	delBtn.MouseButton1Click:Connect(function()
+		row:Destroy()
+	end)
+end
+
+---------------------------------------------------------
+-- 3. ฟังก์ชันสร้างรายการ Multi-Point Teleport (÷) + บินย้อนกลับ
+---------------------------------------------------------
+local function createMultiTeleportRow()
+	local pointList = {}
+	local isTeleporting = false
+	local currentTween = nil
+	local tpTask = nil
+
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 40)
+	row.BackgroundColor3 = Color3.fromRGB(45, 40, 50)
+	row.BorderSizePixel = 0
+	row.Parent = scrollFrame
+
+	local rowCorner = Instance.new("UICorner")
+	rowCorner.CornerRadius = UDim.new(0, 6)
+	rowCorner.Parent = row
+
+	-- ปุ่มเริ่มบิน
+	local startBtn = Instance.new("TextButton")
+	startBtn.Size = UDim2.new(0, 80, 0, 28)
+	startBtn.Position = UDim2.new(0, 6, 0, 6)
+	startBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	startBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+	startBtn.Text = "เริ่มบิน (0)"
+	startBtn.Font = Enum.Font.SourceSansBold
+	startBtn.TextSize = 11
+	startBtn.Parent = row
+
+	local startCorner = Instance.new("UICorner")
+	startCorner.CornerRadius = UDim.new(0, 4)
+	startCorner.Parent = startBtn
+
+	-- ปุ่มวางจุด
+	local setBtn = Instance.new("TextButton")
+	setBtn.Size = UDim2.new(0, 75, 0, 28)
+	setBtn.Position = UDim2.new(0, 90, 0, 6)
+	setBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+	setBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	setBtn.Text = "วางจุด"
+	setBtn.Font = Enum.Font.SourceSansBold
+	setBtn.TextSize = 12
+	setBtn.Parent = row
+
+	local setCorner = Instance.new("UICorner")
+	setCorner.CornerRadius = UDim.new(0, 4)
+	setCorner.Parent = setBtn
+
+	-- ปุ่มลบจุดล่าสุด (-)
+	local removePointBtn = Instance.new("TextButton")
+	removePointBtn.Size = UDim2.new(0, 28, 0, 28)
+	removePointBtn.Position = UDim2.new(0, 169, 0, 6)
+	removePointBtn.BackgroundColor3 = Color3.fromRGB(210, 100, 0)
+	removePointBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	removePointBtn.Text = "-"
+	removePointBtn.Font = Enum.Font.SourceSansBold
+	removePointBtn.TextSize = 18
+	removePointBtn.Parent = row
+
+	local removeCorner = Instance.new("UICorner")
+	removeCorner.CornerRadius = UDim.new(0, 4)
+	removeCorner.Parent = removePointBtn
+
+	-- ปุ่มคัดลอกโค้ด
+	local copyBtn = Instance.new("TextButton")
+	copyBtn.Size = UDim2.new(0, 85, 0, 28)
+	copyBtn.Position = UDim2.new(0, 201, 0, 6)
+	copyBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+	copyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	copyBtn.Text = "คัดลอกโค้ด"
+	copyBtn.Font = Enum.Font.SourceSansBold
+	copyBtn.TextSize = 11
+	copyBtn.Parent = row
+
+	local copyCorner = Instance.new("UICorner")
+	copyCorner.CornerRadius = UDim.new(0, 4)
+	copyCorner.Parent = copyBtn
+
+	-- ปุ่มลบแถว (X)
+	local delBtn = Instance.new("TextButton")
+	delBtn.Size = UDim2.new(0, 28, 0, 28)
+	delBtn.Position = UDim2.new(1, -34, 0, 6)
+	delBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
+	delBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	delBtn.Text = "X"
+	delBtn.Font = Enum.Font.SourceSansBold
+	delBtn.TextSize = 13
+	delBtn.Parent = row
+
+	local delCorner = Instance.new("UICorner")
+	delCorner.CornerRadius = UDim.new(0, 4)
+	delCorner.Parent = delBtn
+
+	-- 1. กดวางจุด
+	setBtn.MouseButton1Click:Connect(function()
+		local root = getTargetRoot()
+		if root then
+			table.insert(pointList, root.CFrame)
+			local count = #pointList
+			
+			setBtn.Text = "วางแล้ว " .. count
+			if not isTeleporting then
+				startBtn.Text = "เริ่มบิน (" .. count .. ")"
+				startBtn.BackgroundColor3 = Color3.fromRGB(200, 120, 0)
+			end
+			copyBtn.BackgroundColor3 = Color3.fromRGB(138, 43, 226)
+		end
+	end)
+
+	-- 2. กดลบจุดล่าสุด
+	removePointBtn.MouseButton1Click:Connect(function()
+		if #pointList > 0 then
+			table.remove(pointList, #pointList)
+			local count = #pointList
+			
+			if count > 0 then
+				setBtn.Text = "วางแล้ว " .. count
+				if not isTeleporting then
+					startBtn.Text = "เริ่มบิน (" .. count .. ")"
+				end
+			else
+				setBtn.Text = "วางจุด"
+				startBtn.Text = "เริ่มบิน (0)"
+				startBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+				copyBtn.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+			end
+		end
+	end)
+
+	-- 3. กดเริ่มบิน (คำนวณเส้นทางและรองรับโหมดบินย้อนกลับ)
+	startBtn.MouseButton1Click:Connect(function()
+		if #pointList == 0 then return end
+
+		if isTeleporting then
+			isTeleporting = false
+			if currentTween then currentTween:Cancel() end
+			if tpTask then task.cancel(tpTask) end
+			startBtn.BackgroundColor3 = Color3.fromRGB(200, 120, 0)
+			startBtn.Text = "เริ่มบิน (" .. #pointList .. ")"
+			return
+		end
+
+		isTeleporting = true
+		startBtn.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+
+		tpTask = task.spawn(function()
+			-- สร้างรายการบินไป (1 -> N)
+			local flightPath = {}
+			for _, cf in ipairs(pointList) do
+				table.insert(flightPath, cf)
+			end
+
+			-- ถ้าเปิดโหมดบินย้อนกลับ ให้เพิ่มเส้นทางขากลับ (N-1 -> 1)
+			if globalPingPong and #pointList > 1 then
+				for i = #pointList - 1, 1, -1 do
+					table.insert(flightPath, pointList[i])
+				end
+			end
+
+			local totalSteps = #flightPath
+			for idx, cf in ipairs(flightPath) do
+				if not isTeleporting then break end
+				startBtn.Text = "จุดที่ " .. idx .. "/" .. totalSteps
+				
+				local tween, duration = flyTo(cf)
+				if tween then
+					currentTween = tween
+					task.wait(duration)
+				end
+			end
+
+			isTeleporting = false
+			startBtn.BackgroundColor3 = Color3.fromRGB(200, 120, 0)
+			startBtn.Text = "สำเร็จแล้ว! (" .. #pointList .. ")"
+			task.wait(1.5)
+			if not isTeleporting then
+				startBtn.Text = "เริ่มบิน (" .. #pointList .. ")"
+			end
+		end)
+	end)
+
+	-- 4. คัดลอก Code
+	copyBtn.MouseButton1Click:Connect(function()
+		if #pointList > 0 and setclipboard then
+			local scriptText = string.format("local TweenService = game:GetService('TweenService')\nlocal flySpeed = %d\nlocal isPingPong = %s\nlocal points = {\n", flySpeed, tostring(globalPingPong))
+			for _, cf in ipairs(pointList) do
+				scriptText = scriptText .. string.format("    CFrame.new(%s),\n", table.concat({cf:GetComponents()}, ", "))
+			end
+			scriptText = scriptText .. [[}
+
+local char = game:GetService("Players").LocalPlayer.Character
+local root = char and (char:FindFirstChildOfClass("Humanoid").SeatPart and char:FindFirstChildOfClass("Humanoid").SeatPart.Parent.PrimaryPart or char:FindFirstChild("HumanoidRootPart"))
+
+if root then
+    local flightPath = {}
+    for _, cf in ipairs(points) do table.insert(flightPath, cf) end
+    if isPingPong and #points > 1 then
+        for i = #points - 1, 1, -1 do table.insert(flightPath, points[i]) end
+    end
+
+    for _, cf in ipairs(flightPath) do
+        local dist = (root.Position - cf.Position).Magnitude
+        local dur = dist / flySpeed
+        local tween = TweenService:Create(root, TweenInfo.new(dur, Enum.EasingStyle.Linear), {CFrame = cf})
+        tween:Play()
+        task.wait(dur)
+    end
+end]]
+			
+			setclipboard(scriptText)
+			copyBtn.Text = "คัดลอกแล้ว!"
+			task.wait(1)
+			copyBtn.Text = "คัดลอกโค้ด"
+		end
+	end)
+
+	delBtn.MouseButton1Click:Connect(function()
+		isTeleporting = false
+		if currentTween then currentTween:Cancel() end
+		if tpTask then task.cancel(tpTask) end
+		row:Destroy()
+	end)
+end
+
+---------------------------------------------------------
+-- 4. เชื่อมต่อปุ่ม + / ÷ และสร้างรายการแรก
+---------------------------------------------------------
+addButton.MouseButton1Click:Connect(function()
+	createSingleTeleportRow()
+end)
+
+multiAddButton.MouseButton1Click:Connect(function()
+	createMultiTeleportRow()
+end)
+
+-- สร้างจุดวาร์ปปกติเริ่มต้น 1 จุด
+createSingleTeleportRow()
